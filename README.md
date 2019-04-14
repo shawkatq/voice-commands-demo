@@ -1,3 +1,7 @@
+## JavaScript Trained System for Voice Commands Recognition
+A pure JavaScript system, which runs totally on the browser, it can be trained to understand limited vocabulary, and after training to try to guess a spoken word.
+
+-----------------------------------------------------------------------------
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
 ## Available Scripts
