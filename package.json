@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "dynamic-time-warping": "^1.0.0",
+    "hark": "^1.2.3",
+    "jquery": "^3.3.1",
+    "meyda": "^4.2.0",
     "react": "^16.8.6",
     "react-dom": "^16.8.6",
     "react-scripts": "2.1.8"
