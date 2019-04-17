@@ -14,7 +14,8 @@ class App extends Component {
       modeMsg: "",
       statusMsg: "",
       trained: false,
-      currentTrainingIndex: null
+      currentTrainingIndex: null,
+      result: ''
     }
 
     /*********  Voice *********/
@@ -39,7 +40,7 @@ class App extends Component {
     if (!this.state.trained) {
       this.setState({
         currentTrainingIndex: 0,
-        msg: "say the next word loud and clear, and wait until we process it.    "  + Recognize.dictionary[0]
+        msg: "say the next word loud and clear, and wait until we process it.  ===>   " + Recognize.dictionary[0]
       });
     }
     this.audioContextType = window.AudioContext || window.webkitAudioContext;
@@ -58,7 +59,8 @@ class App extends Component {
     }
 
     // listen to the audio data, and record into the buffer
-    this.node.onaudioprocess = function (e) {
+    this.node.onaudioprocess = (e) => {
+
       var left = e.inputBuffer.getChannelData(0);
 
       if (!this.recording) return;
@@ -79,13 +81,13 @@ class App extends Component {
 
     // hark: https://github.com/otalk/hark
     this.speechHark = hark(this.localStream, { interval: this._harkInterval, threshold: this._threshold, play: false, recoredInterval: this._stopRecTimeout });
-    this.speechHark.on('speaking',  () => {
+    this.speechHark.on('speaking', () => {
 
       this.setState({ statusMsg: "recoding" });
       // delete pre speech recorded buffer, keep the last 16 blocks
       setTimeout(() => { this.stopRec(); }, this._stopRecTimeout);
     });
-    this.speechHark.on('stopped_speaking', function () {
+    this.speechHark.on('stopped_speaking', () => {
     });
   }
 
@@ -103,17 +105,25 @@ class App extends Component {
 
     var reader = new window.FileReader();
     reader.readAsDataURL(blob);
-    reader.onloadend = function () {
+    reader.onloadend = () => {
       if (this.state.trained) {
         let result = Recognize.recognize(internalLeftChannel, this.setStateMsgFunc);
+        if (result) {
+          this.setState({
+            msg: "Great! try to Again. the result is ===> " + result.transcript
+          });
+        }
+        else {
+          this.setState({
+            msg: "Didn't Got it! please try to Again loud and clear."
+          });
+        }
         console.log(result);
       }
       else {
-        this.setState({
-          msg: "say the next word loud and clear, and wait until we process it. ===>   "  + Recognize.dictionary[this.state.currentTrainingIndex]
-        });
-        let success = Recognize.train(internalLeftChannel, Recognize.dictionary[0], this.setStateMsgFunc);
+        let success = Recognize.train(internalLeftChannel, Recognize.dictionary[this.state.currentTrainingIndex % Recognize.dictionary.length], this.setStateMsgFunc);
         this.traingNextWord(success);
+
       }
     }
 
@@ -125,36 +135,38 @@ class App extends Component {
   traingNextWord = (success) => {
     if (success) {
       // next word
-      let i = (this.state.currentTrainingIndex + 1) % Recognize.dictionary.length;
-      if(i > Recognize.dictionary.length * 2) {
+      let i = this.state.currentTrainingIndex + 1;
+      if (i > Recognize.dictionary.length * 2 - 1) {
         this.setState({
           trained: true,
           currentTrainingIndex: i,
-          msg: "training is finished, now we will try to guess what you tring to say from the trained vocabulary",
+          msg: "training is finished, now we will try to guess what you tring to say from the trained vocabulary.",
           modeMsg: "recognizing mode"
         })
       }
-      this.setState({
-        currentTrainingIndex: i,
-        msg: "say the next word loud and clear, and wait until we process it.    "  + Recognize.dictionary[i]
-      })
+      else {
+        this.setState({
+          currentTrainingIndex: i,
+          msg: "say the next word loud and clear, and wait until we process it.  ===>  " + Recognize.dictionary[i % Recognize.dictionary.length]
+        })
+      }
     }
     else {
       this.setState({
-        msg: "we didn't got it, try again, say the next word loud and clear, and wait until we process it.    "  + Recognize.dictionary[this.state.currentTrainingIndex]
+        msg: "we didn't got it, try again, say the next word loud and clear, and wait until we process it.    " + Recognize.dictionary[this.state.currentTrainingIndex % Recognize.dictionary.length]
       })
     }
   }
 
   setStateMsgFunc = (msg) => {
-    this.setState({statusMsg: msg});
+    this.setState({ statusMsg: msg });
   }
 
   stopUserMediaTrack = () => {
     if (this.track) this.track.stop();
   }
 
-  async startListening()  {
+  async startListening() {
     // var self = this;
     // this.stopListening();
 
@@ -169,7 +181,7 @@ class App extends Component {
     //   console.log(err);
     // });
 
-    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.onMediaSuccess(stream);
     // // show it to user
     // this.audio.src = window.URL.createObjectURL(stream);
@@ -244,5 +256,8 @@ class App extends Component {
     );
   }
 }
+
+
+
 
 export default App;

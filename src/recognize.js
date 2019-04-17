@@ -16,7 +16,8 @@ export class Recognize {
     static calibMode = false;
     static mfccHistoryArr = [];
     static mfccHistoryCunters = [];
-    static dictionary = ['one', 'two', 'three'];
+    static dictionary = ['one', 'two', 'three']; 
+    // static dictionary = ['left', 'right', 'up', 'down']; 
     static bufferSize = 2048;
     static _buffArrSize = 40;      // 40   / 70
     static _minNumberOfVariants = 2;
@@ -45,6 +46,9 @@ export class Recognize {
             this.mfccHistoryCunters[transcript] = 0;
         this.mfccHistoryCunters[transcript]++;
 
+        console.log(this.bufferMfcc);
+        console.log(this.mfccHistoryArr);
+
         setStateFunc("training saved");
         return true;
     }
@@ -55,9 +59,12 @@ export class Recognize {
 
         this.bufferMfcc = this.createMfccMetric();
 
+        console.log(this.bufferMfcc);
+
         this.startTime = Utils.getTimestamp();
         setStateFunc("recognizing");
         this.calculateDistanceArr();
+        console.log(this.mfccDistArr);
         // get closest one using knn
         var knnClosest;
         if (this.K_factor <= this.mfccHistoryArr.length) {
@@ -76,19 +83,18 @@ export class Recognize {
                 if (!this.mfccHistoryCunters[knnClosest.transcript] && this.mfccHistoryCunters[knnClosest.transcript] !== 0)
                     this.mfccHistoryCunters[knnClosest.transcript] = 0;
                 this.mfccHistoryCunters[knnClosest.transcript]++;
-
-                // send back the result
-                knnClosest.closestFromDictionary = knnClosest.transcript;
-                
             }
 
         }
 
-        if (!knnClosest) {
+        if (!knnClosest || knnClosest.confidence < 0.8) {
             this.endTime = Utils.getTimestamp();
             setStateFunc("not recognized" );
             console.log("recognition locally failed or returned no good result (" + (this.endTime - this.startTime) + " ms)");
             return null;
+        }
+        else {
+            knnClosest.processTime = Utils.getTimestamp() - this.startTime;
         }
         setStateFunc("recognized" );
         return knnClosest;
@@ -97,6 +103,7 @@ export class Recognize {
 
     // calculate distance from dictionary mfcc history
     static calculateDistanceArr() {
+        this.mfccDistArr = [];
         for (var i = 0; i < this.mfccHistoryArr.length; i++) {
             if (this.isInDictionary(this.mfccHistoryArr[i].transcript)) {
                 var dtw = new DynamicTimeWarping(this.mfccHistoryArr[i].mfcc, this.bufferMfcc, this.EuclideanDistance);
