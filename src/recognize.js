@@ -11,12 +11,13 @@ export class Recognize {
   * DTW: https://github.com/GordonLesti/dynamic-time-warping
   ******************************************************************************/
 
+    // you can try and tune these variables
     static startTime = null;
     static endTime = null;
     static calibMode = false;
     static mfccHistoryArr = [];
     static mfccHistoryCunters = [];
-    static dictionary = ['one', 'two', 'three']; 
+    static dictionary = ['one', 'two', 'three'];
     // static dictionary = ['left', 'right', 'up', 'down']; 
     static bufferSize = 2048;
     static _buffArrSize = 40;      // 40   / 70
@@ -30,18 +31,26 @@ export class Recognize {
     static bufferMfcc;
     static buffer = {};
 
+    /**
+     * train the system, assume that the passed audio data in the buffer fits the transcript
+     * @param {*} _buffer 
+     * @param {*} transcript 
+     * @param {*} setStateFunc 
+     */
     static train(_buffer, transcript, setStateFunc) {
         setStateFunc("training");
         this.buffer = _buffer;
         Meyda.bufferSize = this.bufferSize;
-        
+
+        // calculate mfcc data
         this.bufferMfcc = this.createMfccMetric();
-        
-        // save current mfcc for next recognitions
+
+        // save current mfcc for future recognitions
         this.mfccHistoryArr.push({
             mfcc: this.bufferMfcc,
             transcript: transcript
         });
+
         if (!this.mfccHistoryCunters[transcript] && this.mfccHistoryCunters[transcript] !== 0)
             this.mfccHistoryCunters[transcript] = 0;
         this.mfccHistoryCunters[transcript]++;
@@ -53,18 +62,27 @@ export class Recognize {
         return true;
     }
 
+    /**
+     * try to recognize what the audio data in the buffer is
+     * @param {*} _buffer 
+     * @param {*} setStateFunc 
+     */
     static recognize(_buffer, setStateFunc) {
         this.buffer = _buffer;
         Meyda.bufferSize = this.bufferSize;
 
+        // calculate mfcc data
         this.bufferMfcc = this.createMfccMetric();
 
         console.log(this.bufferMfcc);
 
         this.startTime = Utils.getTimestamp();
         setStateFunc("recognizing");
+
+        // calculate DTW distance from all available trained data
         this.calculateDistanceArr();
         console.log(this.mfccDistArr);
+
         // get closest one using knn
         var knnClosest;
         if (this.K_factor <= this.mfccHistoryArr.length) {
@@ -87,21 +105,24 @@ export class Recognize {
 
         }
 
-        if (!knnClosest || knnClosest.confidence < 0.8) {
+        // validate that we have minimal recognition confidence
+        if (!knnClosest || knnClosest.confidence < 0.75) {
             this.endTime = Utils.getTimestamp();
-            setStateFunc("not recognized" );
+            setStateFunc("not recognized");
             console.log("recognition locally failed or returned no good result (" + (this.endTime - this.startTime) + " ms)");
             return null;
         }
         else {
             knnClosest.processTime = Utils.getTimestamp() - this.startTime;
         }
-        setStateFunc("recognized" );
+        setStateFunc("recognized");
         return knnClosest;
     };
 
 
-    // calculate distance from dictionary mfcc history
+    /**
+     * calculate DTW distance from dictionary mfcc history
+     */
     static calculateDistanceArr() {
         this.mfccDistArr = [];
         for (var i = 0; i < this.mfccHistoryArr.length; i++) {
@@ -117,7 +138,9 @@ export class Recognize {
     }
 
 
-    // search in dictionary
+    /**
+     * search in dictionary
+     */
     static isInDictionary(word) {
         for (var i = 0; i < this.dictionary.length; i++) {
             if (this.dictionary[i] === word)
@@ -125,7 +148,13 @@ export class Recognize {
         }
         return false;
     }
-    // get the most similar transcript from audio mfcc history array, using Knn Algorithm
+
+    /**
+     * get the most similar transcript from audio mfcc history array, using Knn Algorithm
+     * @param {*} Items 
+     * @param {*} CompFunc 
+     * @param {*} k 
+     */
     static getMostSimilarKnn(Items, CompFunc, k) {
         if (!Items || Items.length === 0)
             return;
@@ -179,11 +208,15 @@ export class Recognize {
         }
         return maxElm;
     }
+
     // 
     static getGaussianKernel(t) {
         return Math.pow(Math.E, -1 / 2 * Math.pow(t / 1000, 2));
     }
-    // calculate current audio mfcc
+
+    /**
+     * calculate audio buffer mfcc data
+     */
     static createMfccMetric() {
         var mfccMetricArr = [];
         for (var i = 0; i < this._buffArrSize; i++) {
@@ -195,7 +228,12 @@ export class Recognize {
 
         return mfccMetricArr;
     }
-    // Euclidean Distance between two victors
+
+    /**
+     * Euclidean Distance between two victors
+     * @param {*} p 
+     * @param {*} q 
+     */
     static EuclideanDistance(p, q) {
         var d = 0;
         if (p.length !== q.length)
@@ -205,7 +243,12 @@ export class Recognize {
         }
         return Math.sqrt(d);
     }
-    // Mfcc object comparison
+
+    /**
+     * Mfcc object comparison
+     * @param {*} a 
+     * @param {*} b 
+     */
     static compareMfcc(a, b) {
         if (a.dist < b.dist)
             return -1;

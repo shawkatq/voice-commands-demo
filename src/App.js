@@ -17,6 +17,7 @@ class App extends Component {
       currentTrainingIndex: null,
       result: ''
     }
+    /******************************************************************************************************/
 
     /*********  Voice *********/
     this.audioContextType = null;
@@ -28,14 +29,18 @@ class App extends Component {
     this.speechHark = null;
     this.leftchannel = [];
 
-    /*********  Settings *********/
-    this._stopRecTimeout = 1000; // 1000 / 2000
+    /********* Settings *********/
+    this._stopRecTimeout = 1000;
     this._threshold = -50; // voice dB
     this._harkInterval = 100;
     this.recordingLength = 0;
     this.numChannels = 1;
   }
 
+  /**
+   * This function will run if the microphone was successfully acquired.
+   * Here we record the data and make a signal when there is a speech start recognized
+   */
   onMediaSuccess = (stream) => {
     if (!this.state.trained) {
       this.setState({
@@ -47,7 +52,7 @@ class App extends Component {
     this.localStream = stream;
     this.track = this.localStream.getTracks()[0];
     // create the MediaStreamAudioSourceNode
-    //Setup Audio Context
+    // Setup Audio Context
     this.context = new this.audioContextType();
     var source = this.context.createMediaStreamSource(this.localStream);
 
@@ -58,7 +63,7 @@ class App extends Component {
       this.node = this.context.createScriptProcessor(Recognize.bufferSize, this.numChannels, this.numChannels);
     }
 
-    // listen to the audio data, and record into the buffer
+    // listen to the audio data, and record into the buffer, this is important to catch the fraction of second before the speech started.
     this.node.onaudioprocess = (e) => {
 
       var left = e.inputBuffer.getChannelData(0);
@@ -76,41 +81,47 @@ class App extends Component {
 
     // connect the ScriptProcessorNode with the input audio
     source.connect(this.node);
-    // if the ScriptProcessorNode is not connected to an output the "onaudioprocess" event is not triggered in chrome
     this.node.connect(this.context.destination);
 
     // hark: https://github.com/otalk/hark
+    // detect a speech start
     this.speechHark = hark(this.localStream, { interval: this._harkInterval, threshold: this._threshold, play: false, recoredInterval: this._stopRecTimeout });
     this.speechHark.on('speaking', () => {
-
       this.setState({ statusMsg: "recoding" });
-      // delete pre speech recorded buffer, keep the last 16 blocks
       setTimeout(() => { this.stopRec(); }, this._stopRecTimeout);
     });
     this.speechHark.on('stopped_speaking', () => {
     });
   }
 
+  /**
+   * stop recording data in the buffer, and process the signal
+   */
   stopRec = () => {
     this.setState({ statusMsg: 'stopped recoding' });
     this.recording = false;
     var internalLeftChannel = this.leftchannel.slice(0);
     var internalRecordingLength = this.recordingLength;
+
+    // create blob to process it
     var blob = Utils.bufferToBlob(internalLeftChannel, internalRecordingLength);
 
     if (!blob)
       return;
 
+    // create a WAV file to listen to the recorded data
     Utils.getVoiceFile(blob, 0);
 
     var reader = new window.FileReader();
     reader.readAsDataURL(blob);
+
+    // read the blob and start processing according to the system state (trained or not)
     reader.onloadend = () => {
       if (this.state.trained) {
         let result = Recognize.recognize(internalLeftChannel, this.setStateMsgFunc);
         if (result) {
           this.setState({
-            msg: "Great! try to Again. the result is ===> " + result.transcript
+            msg: "Great! the result is ===> " + result.transcript + " <=== try more."
           });
         }
         else {
@@ -132,6 +143,10 @@ class App extends Component {
     this.recording = true;
   };
 
+  /**
+   * Move to the next word to train the system.
+   * Train the whole dictionary twice
+   */
   traingNextWord = (success) => {
     if (success) {
       // next word
@@ -140,14 +155,14 @@ class App extends Component {
         this.setState({
           trained: true,
           currentTrainingIndex: i,
-          msg: "training is finished, now we will try to guess what you tring to say from the trained vocabulary.",
+          msg: "training is finished, now we will try to guess what you are trying to say from the trained vocabulary.",
           modeMsg: "recognizing mode"
         })
       }
       else {
         this.setState({
           currentTrainingIndex: i,
-          msg: "say the next word loud and clear, and wait until we process it.  ===>  " + Recognize.dictionary[i % Recognize.dictionary.length]
+          msg: "Good! say the next word loud and clear, and wait until we process it.  ===>  " + Recognize.dictionary[i % Recognize.dictionary.length]
         })
       }
     }
@@ -166,39 +181,19 @@ class App extends Component {
     if (this.track) this.track.stop();
   }
 
+  /**
+   * Start listening to media devices
+   */
   async startListening() {
-    // var self = this;
-    // this.stopListening();
-
-    // this._threshold = -50; // voice dB;
-
-    // this.recording = true;
-    // navigator.mediaDevices.getUserMedia({
-    //   audio: true
-    // }).then(function (stream) {
-    //   self.onMediaSuccess(stream);
-    // }).catch(function (err) {
-    //   console.log(err);
-    // });
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.onMediaSuccess(stream);
-    // // show it to user
-    // this.audio.src = window.URL.createObjectURL(stream);
-    // this.audio.play();
-    // // init recording
-    // this.mediaRecorder = new MediaRecorder(stream);
-    // // init data storage for video chunks
-    // this.chunks = [];
-    // // listen for data from media recorder
-    // this.mediaRecorder.ondataavailable = e => {
-    //   if (e.data && e.data.size > 0) {
-    //     this.chunks.push(e.data);
-    //   }
-    // };
 
   };
 
+  /**
+   * Stop listening to media devices, and empty all buffers and streams
+   */
   stopListening = () => {
     this.recording = false;
     if (this.leftchannel) {
@@ -212,7 +207,7 @@ class App extends Component {
   };
 
   /******************************************************************************************************/
-
+  /** React */
 
   start = () => {
     this.startListening()
